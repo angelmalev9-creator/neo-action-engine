@@ -1,7 +1,7 @@
-import { getBrowser } from "../browser/getBrowser";
+import { getBrowser } from "../browser/getBrowser.js";
 
 export async function bookAction(payload: any) {
-  const { siteUrl, form, customer } = payload;
+  const { siteUrl, form } = payload;
 
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -24,4 +24,3 @@ export async function bookAction(payload: any) {
     confirmationHtml: content
   };
 }
-
