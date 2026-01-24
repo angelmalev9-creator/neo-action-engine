@@ -1,4 +1,4 @@
-import { createServer } from "./server";
+import { createServer } from "./server.js";
 
 const PORT = process.env.PORT || 3000;
 const app = createServer();
@@ -6,4 +6,3 @@ const app = createServer();
 app.listen(PORT, () => {
   console.log(`Action engine running on ${PORT}`);
 });
-
