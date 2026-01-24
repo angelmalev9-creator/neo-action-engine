@@ -1,17 +1,17 @@
 import express, { Request, Response } from "express";
 import { verifyInternalAuth } from "./utils/auth.js";
-import { bookAction } from "./actions/book.js";
+import { executeAction } from "./actions/execute.js";
 
 export function createServer() {
   const app = express();
   app.use(express.json());
 
   app.post(
-    "/action/book",
+    "/action/execute",
     verifyInternalAuth,
     async (req: Request, res: Response) => {
       try {
-        const result = await bookAction(req.body);
+        const result = await executeAction(req.body);
         res.json(result);
       } catch (e) {
         res.status(500).json({
