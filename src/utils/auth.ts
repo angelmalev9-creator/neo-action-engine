@@ -6,9 +6,10 @@ export function verifyInternalAuth(
   next: NextFunction
 ) {
   const token = req.headers.authorization?.replace("Bearer ", "");
+
   if (!token || token !== process.env.INTERNAL_ACTION_KEY) {
     return res.status(401).json({ error: "Unauthorized" });
   }
+
   next();
 }
-
