@@ -4,15 +4,32 @@ import { scoreButtons } from "../browser/scoreElements.js";
 import { observe } from "../browser/observe.js";
 import { compareScans } from "../browser/compareScans.js";
 
+type Step = {
+  type: "navigate" | "scan" | "click" | "observe";
+  detail: string;
+};
+
 export async function autoAvailability(
   page: Page,
   params: { url: string }
 ) {
+  const steps: Step[] = [];
+
+  // 1) NAVIGATE
   await page.goto(params.url, { waitUntil: "networkidle" });
+  steps.push({
+    type: "navigate",
+    detail: "Отворих сайта и изчаках страницата да се зареди"
+  });
 
-  // SCAN 0
+  // 2) SCAN BEFORE
   const scanBefore = await domScan(page);
+  steps.push({
+    type: "scan",
+    detail: "Прегледах страницата за бутони, календари и слотове"
+  });
 
+  // 3) DECIDE + CLICK (SAFE)
   const scoredButtons = scoreButtons(scanBefore.buttons);
   const topButton = scoredButtons[0];
 
@@ -22,28 +39,49 @@ export async function autoAvailability(
     try {
       await page.click(`text=${topButton.text}`, { timeout: 3000 });
       actionTaken = true;
+      steps.push({
+        type: "click",
+        detail: `Натиснах бутон „${topButton.text}“`
+      });
+
       await observe(page);
+      steps.push({
+        type: "observe",
+        detail: "Наблюдавах дали страницата се промени след действието"
+      });
     } catch {
-      // ignore click failure
+      // тих fail – само наблюдение
     }
   }
 
-  // SCAN 1
+  // 4) SCAN AFTER
   const scanAfter = await domScan(page);
-
   const comparison = compareScans(scanBefore, scanAfter);
 
+  // FACTS (обективни)
+  const availableSlots = (scanAfter.possibleSlots || []).filter(
+    (s: any) => !s.disabled
+  );
+
+  const facts = {
+    buttonsFound: scanAfter.buttons?.length || 0,
+    bookingButtonsFound: scoredButtons.filter(b => b.score > 30).length,
+    slotsFound: scanAfter.possibleSlots?.length || 0,
+    slotsAvailable: availableSlots.length > 0,
+    pageChangedAfterAction: comparison.changed
+  };
+
+  // RESULT (ограничен)
+  const result = {
+    status: facts.slotsAvailable
+      ? "availability_found"
+      : "no_availability",
+    confidence: comparison.changed ? "high" : "low"
+  };
+
   return {
-    success: true,
-    actionTaken,
-    confidence: comparison.changed ? "high" : "low",
-    summary: comparison.changed
-      ? "Page state changed after interaction"
-      : "No significant change detected",
-    slots: scanAfter.possibleSlots.filter((s: any) => !s.disabled),
-    debug: {
-      before: scanBefore.possibleSlots.length,
-      after: scanAfter.possibleSlots.length
-    }
+    steps,
+    facts,
+    result
   };
 }
