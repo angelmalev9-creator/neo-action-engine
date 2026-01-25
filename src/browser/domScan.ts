@@ -10,31 +10,33 @@ export async function domScan(page: Page) {
     const buttons = Array.from(
       document.querySelectorAll("button, a, [role='button']")
     )
-      .filter(visible)
-      .map(el => ({
+      .filter((el): el is Element => el instanceof Element && visible(el))
+      .map((el: Element) => ({
         tag: el.tagName.toLowerCase(),
         text: el.textContent?.trim() || "",
         disabled:
-          (el as any).disabled ||
+          (el as HTMLButtonElement).disabled ||
           el.getAttribute("aria-disabled") === "true",
         selector: el.tagName.toLowerCase()
       }));
 
     const dateInputs = Array.from(
-      document.querySelectorAll("input[type='date'], input[placeholder*='date']")
+      document.querySelectorAll(
+        "input[type='date'], input[placeholder*='date']"
+      )
     )
-      .filter(visible)
-      .map(el => ({
+      .filter((el): el is HTMLInputElement => el instanceof HTMLInputElement)
+      .map((el: HTMLInputElement) => ({
         tag: el.tagName.toLowerCase(),
-        placeholder: (el as HTMLInputElement).placeholder,
+        placeholder: el.placeholder,
         selector: "input"
       }));
 
     const possibleSlots = Array.from(
       document.querySelectorAll("[class*='slot'], [class*='time']")
     )
-      .filter(visible)
-      .map(el => ({
+      .filter((el): el is Element => el instanceof Element && visible(el))
+      .map((el: Element) => ({
         text: el.textContent?.trim() || "",
         disabled:
           el.classList.contains("disabled") ||
@@ -48,4 +50,3 @@ export async function domScan(page: Page) {
     };
   });
 }
-
