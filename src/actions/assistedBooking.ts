@@ -2,6 +2,7 @@ import { Page } from "playwright";
 import type { ActionResult, Step } from "../contracts/actionResult.js";
 import { bookingScan } from "../browser/bookingScan.js";
 import { observe } from "../browser/observe.js";
+import { detectConfirmation } from "../browser/confirmDetection.js";
 
 type Params = {
   url: string;
@@ -91,29 +92,41 @@ export async function assistedBooking(
   });
 
   // v1: НЕ натискаме submit selector директно
-  // симулираме последната стъпка
-  await observe(page);
+ // симулираме последната стъпка
+await observe(page);
 
-  steps.push({
-    type: "submit",
-    detail: "Изпратих резервационната форма"
-  });
+steps.push({
+  type: "submit",
+  detail: "Изпратих резервационната форма"
+});
 
-  await observe(page);
+// изчакваме реакцията на системата
+await observe(page);
 
-  steps.push({
-    type: "observe",
-    detail: "Проверих дали има потвърждение за успешна резервация"
-  });
+// ТУК е реалната проверка
+const confirmation = await detectConfirmation(page);
 
-  return {
-    steps,
-    facts: {
-      paymentRequired: false
-    },
-    result: {
-      status: "action_completed",
-      confidence: "high"
-    }
-  };
+steps.push({
+  type: "observe",
+  detail: confirmation.confirmed
+    ? "Открих потвърждение за успешна резервация"
+    : "Не открих ясен сигнал за потвърждение"
+});
+
+return {
+  steps,
+  facts: {
+    paymentRequired: false,
+    confirmed: confirmation.confirmed,
+    confirmationSignal: confirmation.signal || null
+  },
+  result: {
+    status: confirmation.confirmed
+      ? "action_completed"
+      : "uncertain",
+    confidence: confirmation.confirmed
+      ? "very_high"
+      : "medium"
+  }
+};
 }
