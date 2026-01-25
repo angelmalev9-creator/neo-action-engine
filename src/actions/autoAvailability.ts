@@ -1,18 +1,17 @@
 import { Page } from "playwright";
+import type { ActionResult, Step } from "../contracts/actionResult.js";
 import { domScan } from "../browser/domScan.js";
 import { scoreButtons } from "../browser/scoreElements.js";
 import { observe } from "../browser/observe.js";
 import { compareScans } from "../browser/compareScans.js";
 
-type Step = {
-  type: "navigate" | "scan" | "click" | "observe";
-  detail: string;
-};
+
 
 export async function autoAvailability(
   page: Page,
   params: { url: string }
-) {
+): Promise<ActionResult> {
+
   const steps: Step[] = [];
 
   // 1) NAVIGATE
@@ -79,9 +78,12 @@ export async function autoAvailability(
     confidence: comparison.changed ? "high" : "low"
   };
 
-  return {
-    steps,
-    facts,
-    result
-  };
+ const response: ActionResult = {
+  steps,
+  facts,
+  result
+};
+
+return response;
+
 }
