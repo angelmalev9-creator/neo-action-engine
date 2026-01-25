@@ -1,6 +1,6 @@
 import express, { Request, Response } from "express";
-import { verifyInternalAuth } from "./utils/auth";
-import { executeAction } from "./actions/execute";
+import { verifyInternalAuth } from "./utils/auth.js";
+import { executeAction } from "./actions/execute.js";
 
 export function createServer() {
   const app = express();
