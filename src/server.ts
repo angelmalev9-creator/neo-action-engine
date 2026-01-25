@@ -1,7 +1,6 @@
 import express, { Request, Response } from "express";
-import { verifyInternalAuth } from "./utils/auth.js";
+import { verifyInternalAuth } from "./utils/auth";
 import { executeAction } from "./actions/execute";
-
 
 export function createServer() {
   const app = express();
@@ -12,7 +11,16 @@ export function createServer() {
     verifyInternalAuth,
     async (req: Request, res: Response) => {
       try {
-        const result = await executeAction(req.body);
+        const { action, params } = req.body;
+
+        if (!action) {
+          return res.status(400).json({
+            success: false,
+            error: "Missing action"
+          });
+        }
+
+        const result = await executeAction(action, params);
         res.json(result);
       } catch (e) {
         res.status(500).json({
