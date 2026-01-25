@@ -5,6 +5,7 @@ import { checkAvailability } from "./availability.js";
 import { autoAvailability } from "./autoAvailability.js";
 import { exploreBooking } from "./exploreBooking.js";
 import { exploreBookingSystematic } from "./exploreBookingSystematic.js";
+import { exploreBookingInteractive } from "./exploreBookingInteractive.js";
 import { book } from "./book.js";
 
 export async function executeAction(
@@ -31,6 +32,9 @@ export async function executeAction(
 
       case "explore_booking_systematic":
         return exploreBookingSystematic(page, params);
+
+      case "explore_booking_interactive":
+        return exploreBookingInteractive(page, params);
 
       case "book":
         return book(page, params);
