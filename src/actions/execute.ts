@@ -1,15 +1,16 @@
-import { bookAction } from "./book.js";
-import { checkAvailability } from "./availability.js";
+import { withBrowser } from "../browser/session";
+import { checkAvailability } from "./availability";
+import { book } from "./book";
 
-export async function executeAction(action: any) {
-  switch (action.type) {
-    case "availability":
-      return checkAvailability(action.payload);
-
-    case "booking":
-      return bookAction(action.payload);
-
-    default:
-      throw new Error("Unsupported action type");
-  }
+export async function execute(action: string, params: any) {
+  return withBrowser(async page => {
+    switch (action) {
+      case "availability":
+        return checkAvailability(page, params);
+      case "book":
+        return book(page, params);
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
+  });
 }
