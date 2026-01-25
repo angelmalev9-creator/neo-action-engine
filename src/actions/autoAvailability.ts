@@ -71,12 +71,13 @@ export async function autoAvailability(
   };
 
   // RESULT (ограничен)
-  const result = {
-    status: facts.slotsAvailable
-      ? "availability_found"
-      : "no_availability",
-    confidence: comparison.changed ? "high" : "low"
-  };
+ const result: ActionResult["result"] = {
+  status: facts.slotsAvailable
+    ? "availability_found"
+    : "no_availability",
+  confidence: comparison.changed ? "high" : "low"
+};
+
 
  const response: ActionResult = {
   steps,
