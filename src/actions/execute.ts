@@ -3,6 +3,7 @@ import { withBrowser } from "../browser/session.js";
 
 import { checkAvailability } from "./availability.js";
 import { autoAvailability } from "./autoAvailability.js";
+import { exploreBooking } from "./exploreBooking.js";
 import { book } from "./book.js";
 
 export async function executeAction(
@@ -23,6 +24,9 @@ export async function executeAction(
         // иначе → AUTO selector discovery
         return autoAvailability(page, params);
       }
+
+      case "explore_booking":
+        return exploreBooking(page, params);
 
       case "book":
         return book(page, params);
