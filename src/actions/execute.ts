@@ -1,7 +1,7 @@
 import { Page } from "playwright";
-import { withBrowser } from "../browser/session";
-import { checkAvailability } from "./availability";
-import { book } from "./book";
+import { withBrowser } from "../browser/session.js";
+import { checkAvailability } from "./availability.js";
+import { book } from "./book.js";
 
 export async function executeAction(
   action: string,
