@@ -6,10 +6,12 @@ import { detectConfirmation } from "../browser/confirmDetection.js";
 import { hotelOptimizedSubmit } from "../browser/hotelSubmit.js";
 import { memoryAwareSubmit } from "../browser/memoryAwareSubmit.js";
 import { saveSiteMemory } from "../memory/siteMemory.js";
+import { sendBookingEmails } from "../email/sendBookingEmails.js";
 
 type Params = {
   url: string;
   mode: "preview" | "execute";
+  executionMode?: "demo" | "real";
   name?: string;
   email?: string;
 };
@@ -19,6 +21,7 @@ export async function assistedBooking(
   params: Params
 ): Promise<ActionResult> {
   const steps: Step[] = [];
+  const executionMode = params.executionMode ?? "demo";
 
   await page.goto(params.url, { waitUntil: "networkidle" });
   steps.push({
@@ -134,11 +137,23 @@ export async function assistedBooking(
   });
 
   // SAVE MEMORY ПРИ УСПЕХ
-  if (confirmation.confirmed) {
-    saveSiteMemory(params.url, {
-      confirmationSignal: confirmation.signal
-    });
-  }
+ if (confirmation.confirmed) {
+  saveSiteMemory(params.url, {
+    confirmationSignal: confirmation.signal
+  });
+
+  await sendBookingEmails({
+    siteUrl: params.url,
+    customer: {
+      name: params.name!,
+      email: params.email!
+    },
+    execution: {
+      mode: executionMode
+    }
+  });
+}
+
 
   return {
     steps,
