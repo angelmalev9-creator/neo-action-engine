@@ -3,6 +3,7 @@ import type { ActionResult, Step } from "../contracts/actionResult.js";
 import { bookingScan } from "../browser/bookingScan.js";
 import { observe } from "../browser/observe.js";
 import { detectConfirmation } from "../browser/confirmDetection.js";
+import { hotelOptimizedSubmit } from "../browser/hotelSubmit.js";
 
 type Params = {
   url: string;
@@ -86,19 +87,40 @@ export async function assistedBooking(
     };
   }
 
+ steps.push({
+  type: "fill",
+  detail: "Попълвам данните за резервация"
+});
+
+const submitResult = await hotelOptimizedSubmit(page, {
+  name: params.name,
+  email: params.email
+});
+
+if (!submitResult.submitted) {
   steps.push({
-    type: "fill",
-    detail: `Попълних име (${params.name}) и имейл (${params.email})`
+    type: "stop",
+    detail: `Не успях да намеря безопасен submit бутон (${submitResult.reason})`
   });
 
-  // v1: НЕ натискаме submit selector директно
- // симулираме последната стъпка
-await observe(page);
+  return {
+    steps,
+    facts: {
+      paymentRequired: false,
+      submitted: false
+    },
+    result: {
+      status: "blocked",
+      confidence: "high"
+    }
+  };
+}
 
 steps.push({
   type: "submit",
   detail: "Изпратих резервационната форма"
 });
+
 
 // изчакваме реакцията на системата
 await observe(page);
