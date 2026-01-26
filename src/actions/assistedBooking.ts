@@ -4,6 +4,8 @@ import { bookingScan } from "../browser/bookingScan.js";
 import { observe } from "../browser/observe.js";
 import { detectConfirmation } from "../browser/confirmDetection.js";
 import { hotelOptimizedSubmit } from "../browser/hotelSubmit.js";
+import { memoryAwareSubmit } from "../browser/memoryAwareSubmit.js";
+import { saveSiteMemory } from "../memory/siteMemory.js";
 
 type Params = {
   url: string;
@@ -35,13 +37,8 @@ export async function assistedBooking(
 
     return {
       steps,
-      facts: {
-        paymentRequired: true
-      },
-      result: {
-        status: "blocked",
-        confidence: "high"
-      }
+      facts: { paymentRequired: true },
+      result: { status: "blocked", confidence: "high" }
     };
   }
 
@@ -80,75 +77,83 @@ export async function assistedBooking(
     return {
       steps,
       facts: {},
-      result: {
-        status: "blocked",
-        confidence: "high"
-      }
+      result: { status: "blocked", confidence: "high" }
     };
   }
 
- steps.push({
-  type: "fill",
-  detail: "Попълвам данните за резервация"
-});
-
-const submitResult = await hotelOptimizedSubmit(page, {
-  name: params.name,
-  email: params.email
-});
-
-if (!submitResult.submitted) {
   steps.push({
-    type: "stop",
-    detail: `Не успях да намеря безопасен submit бутон (${submitResult.reason})`
+    type: "fill",
+    detail: "Попълвам данните за резервация"
   });
+
+  // 1️⃣ ОПИТ С MEMORY
+  const memorySubmit = await memoryAwareSubmit(page, params.url);
+
+  if (memorySubmit.submitted) {
+    steps.push({
+      type: "submit",
+      detail: "Използвах запомнен submit бутон за този сайт"
+    });
+  } else {
+    // 2️⃣ FALLBACK → HEURISTICS
+    const submitResult = await hotelOptimizedSubmit(page, {
+      name: params.name,
+      email: params.email
+    });
+
+    if (!submitResult.submitted) {
+      steps.push({
+        type: "stop",
+        detail: `Не успях да намеря безопасен submit бутон (${submitResult.reason})`
+      });
+
+      return {
+        steps,
+        facts: { paymentRequired: false, submitted: false },
+        result: { status: "blocked", confidence: "high" }
+      };
+    }
+
+    steps.push({
+      type: "submit",
+      detail: "Изпратих резервационната форма"
+    });
+  }
+
+  // изчакваме реакцията
+  await observe(page);
+
+  // CONFIRMATION DETECTION
+  const confirmation = await detectConfirmation(page);
+
+  steps.push({
+    type: "observe",
+    detail: confirmation.confirmed
+      ? "Открих потвърждение за успешна резервация"
+      : "Не открих ясен сигнал за потвърждение"
+  });
+
+  // SAVE MEMORY ПРИ УСПЕХ
+  if (confirmation.confirmed) {
+    saveSiteMemory(params.url, {
+      confirmationSignal: confirmation.signal
+    });
+  }
 
   return {
     steps,
     facts: {
       paymentRequired: false,
-      submitted: false
+      confirmed: confirmation.confirmed,
+      confirmationSignal: confirmation.signal || null
     },
     result: {
-      status: "blocked",
-      confidence: "high"
+      status: confirmation.confirmed
+        ? "action_completed"
+        : "uncertain",
+      confidence: confirmation.confirmed
+        ? "very_high"
+        : "medium"
     }
   };
-}
-
-steps.push({
-  type: "submit",
-  detail: "Изпратих резервационната форма"
-});
-
-
-// изчакваме реакцията на системата
-await observe(page);
-
-// ТУК е реалната проверка
-const confirmation = await detectConfirmation(page);
-
-steps.push({
-  type: "observe",
-  detail: confirmation.confirmed
-    ? "Открих потвърждение за успешна резервация"
-    : "Не открих ясен сигнал за потвърждение"
-});
-
-return {
-  steps,
-  facts: {
-    paymentRequired: false,
-    confirmed: confirmation.confirmed,
-    confirmationSignal: confirmation.signal || null
-  },
-  result: {
-    status: confirmation.confirmed
-      ? "action_completed"
-      : "uncertain",
-    confidence: confirmation.confirmed
-      ? "very_high"
-      : "medium"
-  }
-};
 }
