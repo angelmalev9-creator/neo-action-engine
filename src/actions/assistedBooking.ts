@@ -7,6 +7,7 @@ import { hotelOptimizedSubmit } from "../browser/hotelSubmit.js";
 import { memoryAwareSubmit } from "../browser/memoryAwareSubmit.js";
 import { saveSiteMemory } from "../memory/siteMemory.js";
 import { sendBookingEmails } from "../email/sendBookingEmails.js";
+import { iframeScan } from "../browser/iframeScan.js";
 
 type Params = {
   url: string;
@@ -23,15 +24,45 @@ export async function assistedBooking(
   const steps: Step[] = [];
   const executionMode = params.executionMode ?? "demo";
 
+  // 1️⃣ NAVIGATE
   await page.goto(params.url, { waitUntil: "networkidle" });
   steps.push({
     type: "navigate",
     detail: "Отворих сайта и стигнах до резервационната форма"
   });
 
+  // 2️⃣ IFRAME SCAN
+  const iframeInfo = await iframeScan(page);
+  steps.push({
+    type: "scan",
+    detail: `Iframe detected=${iframeInfo.hasIframe}, blocked=${iframeInfo.blocked}`
+  });
+
+  // ❌ HARD STOP — BLOCKED IFRAME
+  if (iframeInfo.blocked) {
+    steps.push({
+      type: "stop",
+      detail: "Резервационната система е външна и не позволява автоматично изпълнение"
+    });
+
+    return {
+      steps,
+      facts: {
+        iframeDetected: true,
+        iframeBlocked: true,
+        provider: iframeInfo.providerHint
+      },
+      result: {
+        status: "no_availability",
+        confidence: "high"
+      }
+    };
+  }
+
+  // 3️⃣ BOOKING SCAN
   const scan = await bookingScan(page);
 
-  // SAFETY CHECK
+  // SAFETY: PAYMENT
   if (scan.paymentRequired) {
     steps.push({
       type: "stop",
@@ -40,37 +71,68 @@ export async function assistedBooking(
 
     return {
       steps,
-      facts: { paymentRequired: true },
-      result: { status: "blocked", confidence: "high" }
+      facts: {
+        paymentRequired: true,
+        iframeDetected: iframeInfo.hasIframe
+      },
+      result: {
+        status: "no_availability",
+        confidence: "high"
+      }
     };
   }
 
-  // PREVIEW MODE
+  // 4️⃣ PREVIEW MODE
   if (params.mode === "preview") {
     steps.push({
       type: "scan",
-      detail: "Проверих дали резервацията може да се направи безплатно"
+      detail: iframeInfo.hasIframe
+        ? "Външна система – възможен е само преглед"
+        : "Резервацията може да се направи безплатно"
     });
 
     steps.push({
       type: "wait",
-      detail: "Готов съм да направя резервацията след ваше потвърждение"
+      detail: "Готов съм да продължа след потвърждение"
     });
 
     return {
       steps,
       facts: {
         paymentRequired: false,
+        iframeDetected: iframeInfo.hasIframe,
+        readOnly: iframeInfo.mode === "cross-origin-readable",
         slotsAvailable: scan.rooms.length > 0
       },
       result: {
-        status: "ready_to_submit",
+        status: "availability_found",
+        confidence: iframeInfo.hasIframe ? "medium" : "high"
+      }
+    };
+  }
+
+  // 5️⃣ EXECUTE MODE — BLOCK IF READ-ONLY
+  if (iframeInfo.mode === "cross-origin-readable") {
+    steps.push({
+      type: "stop",
+      detail: "Външната система позволява преглед, но не и автоматично изпълнение"
+    });
+
+    return {
+      steps,
+      facts: {
+        iframeDetected: true,
+        readOnly: true,
+        provider: iframeInfo.providerHint
+      },
+      result: {
+        status: "no_availability",
         confidence: "high"
       }
     };
   }
 
-  // EXECUTE MODE
+  // 6️⃣ VALIDATE INPUT
   if (!params.name || !params.email) {
     steps.push({
       type: "stop",
@@ -80,7 +142,10 @@ export async function assistedBooking(
     return {
       steps,
       facts: {},
-      result: { status: "blocked", confidence: "high" }
+      result: {
+        status: "no_availability",
+        confidence: "high"
+      }
     };
   }
 
@@ -89,7 +154,7 @@ export async function assistedBooking(
     detail: "Попълвам данните за резервация"
   });
 
-  // 1️⃣ ОПИТ С MEMORY
+  // 7️⃣ SUBMIT (MEMORY FIRST)
   const memorySubmit = await memoryAwareSubmit(page, params.url);
 
   if (memorySubmit.submitted) {
@@ -98,7 +163,6 @@ export async function assistedBooking(
       detail: "Използвах запомнен submit бутон за този сайт"
     });
   } else {
-    // 2️⃣ FALLBACK → HEURISTICS
     const submitResult = await hotelOptimizedSubmit(page, {
       name: params.name,
       email: params.email
@@ -107,13 +171,16 @@ export async function assistedBooking(
     if (!submitResult.submitted) {
       steps.push({
         type: "stop",
-        detail: `Не успях да намеря безопасен submit бутон (${submitResult.reason})`
+        detail: `Не открих безопасен submit бутон (${submitResult.reason})`
       });
 
       return {
         steps,
-        facts: { paymentRequired: false, submitted: false },
-        result: { status: "blocked", confidence: "high" }
+        facts: { submitted: false },
+        result: {
+          status: "no_availability",
+          confidence: "high"
+        }
       };
     }
 
@@ -123,12 +190,10 @@ export async function assistedBooking(
     });
   }
 
-  // изчакваме реакцията
+  // 8️⃣ OBSERVE + CONFIRMATION
   await observe(page);
 
-  // CONFIRMATION DETECTION
   const confirmation = await detectConfirmation(page);
-
   steps.push({
     type: "observe",
     detail: confirmation.confirmed
@@ -136,29 +201,27 @@ export async function assistedBooking(
       : "Не открих ясен сигнал за потвърждение"
   });
 
-  // SAVE MEMORY ПРИ УСПЕХ
- if (confirmation.confirmed) {
-  saveSiteMemory(params.url, {
-    confirmationSignal: confirmation.signal
-  });
+  // 9️⃣ SAVE MEMORY + EMAIL
+  if (confirmation.confirmed) {
+    saveSiteMemory(params.url, {
+      confirmationSignal: confirmation.signal
+    });
 
-  await sendBookingEmails({
-    siteUrl: params.url,
-    customer: {
-      name: params.name!,
-      email: params.email!
-    },
-    execution: {
-      mode: executionMode
-    }
-  });
-}
-
+    await sendBookingEmails({
+      siteUrl: params.url,
+      customer: {
+        name: params.name,
+        email: params.email
+      },
+      execution: {
+        mode: executionMode
+      }
+    });
+  }
 
   return {
     steps,
     facts: {
-      paymentRequired: false,
       confirmed: confirmation.confirmed,
       confirmationSignal: confirmation.signal || null
     },
