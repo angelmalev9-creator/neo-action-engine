@@ -1,43 +1,49 @@
-export type StepType =
-  | "navigate"
-  | "scan"
-  | "click"
-  | "observe"
-  | "fill"
-  | "submit"
-  | "wait"
-  | "stop";
-
 export type Step = {
-  type: StepType;
+  type:
+    | "navigate"
+    | "scan"
+    | "observe"
+    | "click"
+    | "fill"
+    | "submit"
+    | "wait"
+    | "stop";
   detail: string;
-};
-
-export type Facts = {
-  buttonsFound?: number;
-  bookingButtonsFound?: number;
-  calendarsFound?: number;
-  slotsFound?: number;
-  slotsAvailable?: boolean;
-  pageChangedAfterAction?: boolean;
-  blockedByLogin?: boolean;
-  blockedByCaptcha?: boolean;
 };
 
 export type ResultStatus =
   | "availability_found"
   | "no_availability"
-  | "action_completed"
   | "blocked"
-  | "uncertain";
+  | "uncertain"
+  | "ready_to_submit"
+  | "action_completed";
 
-export type Result = {
-  status: ResultStatus;
-  confidence: "high" | "medium" | "low";
+export type Confidence =
+  | "low"
+  | "medium"
+  | "high"
+  | "very_high";
+
+export type Facts = {
+  // availability / booking
+  slotsAvailable?: boolean;
+  slotsFound?: number;
+
+  // booking specifics
+  paymentRequired?: boolean;
+  confirmed?: boolean;
+  confirmationSignal?: string | null;
+
+  // extensible
+  [key: string]: any;
 };
 
 export type ActionResult = {
   steps: Step[];
   facts: Facts;
-  result: Result;
+  result: {
+    status: ResultStatus;
+    confidence: Confidence;
+  };
 };
