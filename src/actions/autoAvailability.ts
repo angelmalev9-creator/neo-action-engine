@@ -20,28 +20,12 @@ export async function autoAvailability(
     detail: "Отворих сайта и изчаках страницата да се зареди"
   });
 
-  // 2) IFRAME SCAN
+  // 2) IFRAME SCAN (като scan)
   const iframeInfo = await iframeScan(page);
   steps.push({
-    type: "iframe-scan",
-    detail: `Iframe scan: mode=${iframeInfo.mode}, count=${iframeInfo.iframeCount}`
+    type: "scan",
+    detail: `Iframe detected=${iframeInfo.hasIframe}, blocked=${iframeInfo.blocked}`
   });
-
-  // ❌ HARD BLOCK
-  if (iframeInfo.mode === "cross-origin-blocked") {
-    return {
-      steps,
-      facts: {
-        iframeDetected: true,
-        iframeMode: iframeInfo.mode,
-        provider: iframeInfo.providerHint
-      },
-      result: {
-        status: "availability_external_blocked",
-        confidence: "high"
-      }
-    };
-  }
 
   // 3) SCAN BEFORE
   const scanBefore = await domScan(page);
@@ -55,13 +39,12 @@ export async function autoAvailability(
   const scoredButtons = scoreButtons(scanBefore.buttons);
   const topButton = scoredButtons[0];
 
-  const allowClick =
+  if (
+    !iframeInfo.blocked &&
     topButton &&
     topButton.score > 30 &&
-    topButton.selector &&
-    iframeInfo.mode !== "cross-origin-blocked";
-
-  if (allowClick) {
+    topButton.selector
+  ) {
     try {
       await page.click(topButton.selector, { timeout: 3000 });
       actionTaken = true;
@@ -77,7 +60,7 @@ export async function autoAvailability(
       });
     } catch {
       steps.push({
-        type: "click-failed",
+        type: "observe",
         detail: "Опит за клик, но без ефект"
       });
     }
@@ -93,35 +76,27 @@ export async function autoAvailability(
 
   const facts = {
     iframeDetected: iframeInfo.hasIframe,
+    iframeBlocked: iframeInfo.blocked,
     iframeMode: iframeInfo.mode,
     provider: iframeInfo.providerHint,
-    buttonsFound: scanAfter.buttons?.length || 0,
-    bookingButtonsFound: scoredButtons.filter(b => b.score > 30).length,
     slotsFound: scanAfter.possibleSlots?.length || 0,
     slotsAvailable: availableSlots.length > 0,
     pageChangedAfterAction: comparison.changed,
-    actionTaken,
-    readOnly: iframeInfo.mode === "cross-origin-readable"
+    actionTaken
   };
 
-  // 6) RESULT LOGIC (FIXED)
-  let status: ActionResult["result"]["status"];
-  let confidence: ActionResult["result"]["confidence"];
-
-  if (facts.slotsAvailable) {
-    status = "availability_found";
-    confidence = "high";
-  } else if (iframeInfo.mode === "cross-origin-readable") {
-    status = "availability_external_readonly";
-    confidence = "medium";
-  } else {
-    status = "no_availability";
-    confidence = comparison.changed ? "medium" : "low";
-  }
+  const result: ActionResult["result"] = {
+    status: facts.slotsAvailable ? "availability_found" : "no_availability",
+    confidence: iframeInfo.blocked
+      ? "low"
+      : comparison.changed
+      ? "high"
+      : "medium"
+  };
 
   return {
     steps,
     facts,
-    result: { status, confidence }
+    result
   };
 }
