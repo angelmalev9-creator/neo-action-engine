@@ -20,14 +20,14 @@ export async function autoAvailability(
     detail: "Отворих сайта и изчаках страницата да се зареди"
   });
 
-  // 2) IFRAME SCAN (КРИТИЧНО)
+  // 2) IFRAME SCAN
   const iframeInfo = await iframeScan(page);
   steps.push({
     type: "iframe-scan",
     detail: `Iframe scan: mode=${iframeInfo.mode}, count=${iframeInfo.iframeCount}`
   });
 
-  // ❌ BLOCKED IFRAME → HARD STOP
+  // ❌ HARD BLOCK
   if (iframeInfo.mode === "cross-origin-blocked") {
     return {
       steps,
@@ -37,7 +37,7 @@ export async function autoAvailability(
         provider: iframeInfo.providerHint
       },
       result: {
-        status: "availability_unknown",
+        status: "availability_external_blocked",
         confidence: "high"
       }
     };
@@ -50,17 +50,18 @@ export async function autoAvailability(
     detail: "Прегледах страницата за бутони, календари и слотове"
   });
 
-  // 4) DECIDE + CLICK (SAFE)
+  // 4) DECIDE + CLICK
   let actionTaken = false;
   const scoredButtons = scoreButtons(scanBefore.buttons);
   const topButton = scoredButtons[0];
 
-  if (
-    iframeInfo.mode !== "cross-origin-readable" && // ❗ read-only iframe
+  const allowClick =
     topButton &&
     topButton.score > 30 &&
-    topButton.selector
-  ) {
+    topButton.selector &&
+    iframeInfo.mode !== "cross-origin-blocked";
+
+  if (allowClick) {
     try {
       await page.click(topButton.selector, { timeout: 3000 });
       actionTaken = true;
@@ -99,19 +100,28 @@ export async function autoAvailability(
     slotsFound: scanAfter.possibleSlots?.length || 0,
     slotsAvailable: availableSlots.length > 0,
     pageChangedAfterAction: comparison.changed,
-    actionTaken
+    actionTaken,
+    readOnly: iframeInfo.mode === "cross-origin-readable"
   };
 
-  const result: ActionResult["result"] = {
-    status: facts.slotsAvailable
-      ? "availability_found"
-      : "no_availability",
-    confidence: comparison.changed ? "high" : "low"
-  };
+  // 6) RESULT LOGIC (FIXED)
+  let status: ActionResult["result"]["status"];
+  let confidence: ActionResult["result"]["confidence"];
+
+  if (facts.slotsAvailable) {
+    status = "availability_found";
+    confidence = "high";
+  } else if (iframeInfo.mode === "cross-origin-readable") {
+    status = "availability_external_readonly";
+    confidence = "medium";
+  } else {
+    status = "no_availability";
+    confidence = comparison.changed ? "medium" : "low";
+  }
 
   return {
     steps,
     facts,
-    result
+    result: { status, confidence }
   };
 }
