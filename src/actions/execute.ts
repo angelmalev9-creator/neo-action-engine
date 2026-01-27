@@ -38,6 +38,7 @@ export async function executeAction(
       case "explore_booking_interactive":
         return exploreBookingInteractive(page, params);
 
+      case "assistedBooking":
       case "assisted_booking":
         return assistedBooking(page, params);
 
