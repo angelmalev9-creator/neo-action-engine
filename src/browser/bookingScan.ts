@@ -24,7 +24,7 @@ export async function bookingScan(page: Page) {
     )
       .filter(visible)
       .filter(el =>
-        /search|check|availability|find/i.test(el.textContent || "")
+        /search|check|availability|find|show|rates|резерв|запази|покажи|цени|наличност|провери|търси/i.test(el.textContent || "")
       );
 
     const roomCards = Array.from(
