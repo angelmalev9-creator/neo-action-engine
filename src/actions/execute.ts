@@ -15,6 +15,7 @@ export async function executeAction(
 ) {
   return withBrowser(async (page: Page) => {
     switch (action) {
+      case "autoAvailability":
       case "availability": {
         // ако има selectors → manual mode
         if (
