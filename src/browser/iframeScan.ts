@@ -35,6 +35,8 @@ export async function iframeScan(page: Page): Promise<IframeScanResult> {
 
     // provider detection (heuristic)
     if (/cloudbeds/i.test(url)) providerHint = "cloudbeds";
+    else if (/clock-?pms|clocksoftware/i.test(url)) providerHint = "clock-pms";
+    else if (/wbe\.clock/i.test(url)) providerHint = "clock-pms";
     else if (/littlehotelier/i.test(url)) providerHint = "littlehotelier";
     else if (/hotelrunner/i.test(url)) providerHint = "hotelrunner";
     else if (/booking|airbnb|agoda/i.test(url)) providerHint = "blocked-platform";
