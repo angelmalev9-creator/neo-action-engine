@@ -7,17 +7,19 @@ export async function domScan(page: Page) {
       return r.width > 0 && r.height > 0;
     };
 
-    const buttons = Array.from(
-      document.querySelectorAll("button, a, [role='button']")
+ const buttons = Array.from(
+      document.querySelectorAll("button, a, [role='button'], input[type='submit'], input[type='button']")
     )
       .filter((el): el is Element => el instanceof Element && visible(el))
-      .map((el: Element) => ({
+      .map((el: Element, idx: number) => ({
         tag: el.tagName.toLowerCase(),
-        text: el.textContent?.trim() || "",
+        text: el.textContent?.trim() || (el as HTMLInputElement).value || "",
         disabled:
           (el as HTMLButtonElement).disabled ||
           el.getAttribute("aria-disabled") === "true",
-        selector: el.tagName.toLowerCase()
+        selector: el.id ? `#${el.id}` : 
+                  el.className ? `${el.tagName.toLowerCase()}.${el.className.split(' ')[0]}` :
+                  `${el.tagName.toLowerCase()}:nth-of-type(${idx + 1})`
       }));
 
     const dateInputs = Array.from(
