@@ -1,5 +1,5 @@
 import { Page } from "playwright";
-import type { ActionResult, Step } from "../contracts/actionResult.js";
+import type { ActionResult, Step, ResultStatus, Confidence, Facts } from "../contracts/actionResult.js";
 import { domScan } from "../browser/domScan.js";
 import { scoreButtons } from "../browser/scoreElements.js";
 import { observe } from "../browser/observe.js";
@@ -24,12 +24,18 @@ export async function autoAvailability(
     console.log(`[autoAvailability] ✅ Page loaded`);
   } catch (navError) {
     console.log(`[autoAvailability] ❌ Navigation failed:`, navError);
+    const errorFacts: Facts = { 
+      slotsAvailable: false,
+      error: "navigation_failed" 
+    };
+    const errorStatus: ResultStatus = "blocked";
+    const errorConfidence: Confidence = "low";
     return {
       success: false,
       available: false,
       steps: [{ type: "navigate", detail: "Грешка при зареждане на сайта" }],
-      facts: { error: "navigation_failed" },
-      result: { status: "error", confidence: "low" }
+      facts: errorFacts,
+      result: { status: errorStatus, confidence: errorConfidence }
     };
   }
 
@@ -119,7 +125,7 @@ export async function autoAvailability(
     roomElements.length > 0 ||
     comparison.changed;
 
-  const facts = {
+  const facts: Facts = {
     iframeDetected: iframeInfo.hasIframe,
     iframeBlocked: iframeInfo.blocked,
     iframeMode: iframeInfo.mode,
@@ -127,34 +133,31 @@ export async function autoAvailability(
     buttonsFound: scanBefore.buttons.length,
     buttonClicked: clickedButton,
     slotsFound: scanAfter.possibleSlots?.length || 0,
-    slotsAvailable: availableSlots.length,
+    slotsAvailable: availableSlots.length > 0,
     pricesFound: priceElements.length,
     roomsFound: roomElements.length,
     pageChangedAfterAction: comparison.changed,
     actionTaken
   };
 
-  const confidence = iframeInfo.blocked
+  const confidence: Confidence = iframeInfo.blocked
     ? "low"
     : (comparison.changed || priceElements.length > 0)
     ? "high"
     : "medium";
 
-  const result = {
-    status: hasAvailability ? "availability_found" : "no_availability",
-    confidence
-  };
+  const status: ResultStatus = hasAvailability ? "availability_found" : "no_availability";
 
   console.log(`[autoAvailability] ✅ Complete. Available: ${hasAvailability}, Confidence: ${confidence}`);
 
-  // ═══════════════════════════════════════════════════════════════
-  // RETURN FORMAT THAT NEO EXPECTS: { success, available, ... }
-  // ═══════════════════════════════════════════════════════════════
   return {
     success: true,
     available: hasAvailability,
     steps,
     facts,
-    result
+    result: {
+      status,
+      confidence
+    }
   };
 }
